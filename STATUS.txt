@@ -1,0 +1,18 @@
+IHS Practice Files
+Desktop Chrome folder tool. Connect a practice folder on this PC.
+
+Live: https://in-housesystems.com/practice-files/
+Repo: in-housesystems/practice-files (master)
+Pages path: /practice-files/ (same live URL)
+
+Static GitHub Pages UI shell. File System Access API.
+Layout: CaseID/VisitDate/{scans,notes,design,print}.
+Files stay on disk. Nothing is uploaded.
+Only the directory handle is stored in IndexedDB.
+
+DEMO Case IDs until a folder is connected.
+Forget folder = browser connection only; files stay.
+
+Not a patient chart. Not HIPAA certified. No PHI in git.
+
+Last ship: grok v1 static shell (replace Codex-era UI).

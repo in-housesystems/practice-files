@@ -1,23 +1,1232 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#10141c"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'self'; form-action 'none'; connect-src 'none'; worker-src 'none'; manifest-src 'none'; font-src 'none'; object-src 'none'; frame-src 'none'"><base href="/practice-files/"><title>IHS Practice Files</title><link rel="icon" href="favicon.svg" type="image/svg+xml">
-<style>:root{--bone:#f3eee4;--bone2:#ebe4d6;--ink:#111;--muted:#5a574e;--navy:#10141c;--mint:#7fe0b8}*{box-sizing:border-box}body{margin:0;color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background-color:var(--bone);background-image:linear-gradient(rgba(16,20,28,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(16,20,28,.045) 1px,transparent 1px);background-size:24px 24px}nav{position:sticky;top:0;z-index:20;background:var(--navy);color:var(--bone);padding:10px 16px}.navin{max-width:960px;margin:auto;display:flex;gap:14px;align-items:center;flex-wrap:wrap}.brand{margin-right:auto}.brand b{color:var(--mint);letter-spacing:.13em}.brand span{margin-left:9px}nav a{color:var(--bone);text-decoration:none;padding:10px 12px;min-height:44px;border-radius:999px}nav a.active{background:var(--mint);color:var(--navy)}main,footer{max-width:960px;margin:auto;padding:20px 16px}h1,h2,h3{font-family:Georgia,"Times New Roman",Times,serif}.card{background:var(--bone2);padding:18px;border-radius:12px;margin-bottom:16px}.notice{border-left:5px solid var(--navy)}button{min-height:44px;border:1px solid var(--ink);border-radius:999px;padding:10px 17px;background:var(--navy);color:var(--mint);font-weight:700;cursor:pointer}.secondary{background:var(--bone2);color:var(--ink)}.danger{background:var(--ink);color:var(--bone)}button:disabled{opacity:.45;cursor:not-allowed}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.full{grid-column:1/-1}label{display:block;font-weight:700;margin-bottom:5px}input,select{width:100%;min-height:44px;padding:9px;border:1px solid var(--ink);border-radius:8px;background:var(--bone);font:inherit}.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.drop{border:2px dashed var(--navy);padding:28px;text-align:center;border-radius:12px}.file,.case{display:grid;grid-template-columns:1.3fr .6fr 2fr auto;gap:9px;padding:10px 0;border-bottom:1px solid rgba(17,17,17,.25);align-items:center}.badge{display:inline-block;border-radius:999px;padding:3px 8px;background:var(--navy);color:var(--mint);font-size:.8rem}.error{font-weight:700;border:2px solid var(--ink);padding:10px;border-radius:8px}.muted,small{color:var(--muted)}footer{font-size:.9rem;border-top:1px solid var(--ink)}:focus-visible{outline:2px solid var(--navy);outline-offset:2px}.hide{display:none!important}@media(max-width:800px){.grid,.file,.case{grid-template-columns:1fr}.brand{width:100%}}</style></head>
-<body><nav><div class="navin"><div class="brand"><b>IHS</b><span>Practice Files</span></div><a href="#/connect">Connect</a><a href="#/intake">Intake</a><a href="#/queue">Queue</a></div></nav><main id="app"></main><footer><p><strong>Public website shell. Do not enter patient names, initials, DOB, identifying chart numbers, or other patient identifiers.</strong></p><p><strong>Use only the practice's non-patient Case ID.</strong></p><p><strong>This app is not HIPAA certified and does not claim HIPAA compliance.</strong></p></footer>
-<script>(()=>{'use strict';
-const app=document.querySelector('#app'),DB='ihs-files-v1',STORE='handles',KEY='practiceRoot',buckets=['scans','notes','design','print'];let root=null,granted=false,queue=[],ignored=[],scannedAt=null,files=[],collisions=new Map(),message='',scanning=false;
-const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const localDate=(d=new Date())=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;const validCase=v=>{v=v.trim();return v.length>=1&&v.length<=80&&v!=='.'&&v!=='..'&&!/[\\/<>:"|?*\x00-\x1f\x7f]/.test(v)&&!/[. ]$/.test(v)&&!/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?$/i.test(v)};function realDate(s){if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return false;const [y,m,d]=s.split('-').map(Number),x=new Date(y,m-1,d);return x.getFullYear()===y&&x.getMonth()===m-1&&x.getDate()===d}function maxDate(){const d=new Date();d.setDate(d.getDate()+1);return localDate(d)}function supported(){return typeof window.showDirectoryPicker==='function'&&window.isSecureContext===true&&!matchMedia('(max-width: 800px)').matches}function privacy(){return `<div class="card notice"><p>Files never leave this computer. This page is only the tool.</p><p>Nothing is uploaded to GitHub, IHS Drive, or any server.</p><p>Chrome: connect a practice folder on this PC. You may need to grant access again.</p><p>File and folder names can contain patient information. They stay on disk and are never logged, synced, or analyzed.</p></div>`}function shell(title,html){app.innerHTML=`<h1>${title}</h1>${message?`<div class="card">${esc(message)}</div>`:''}${privacy()}${html}`;message=''}function note(s){message=s;render()}
-function dbOpen(){return new Promise((res,rej)=>{const q=indexedDB.open(DB,1);q.onupgradeneeded=()=>q.result.createObjectStore(STORE);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}async function dbGet(){const db=await dbOpen();return new Promise((res,rej)=>{const t=db.transaction(STORE),q=t.objectStore(STORE).get(KEY);q.onsuccess=()=>res(q.result||null);q.onerror=()=>rej(q.error);t.oncomplete=()=>db.close()})}async function dbPut(v){const db=await dbOpen();return new Promise((res,rej)=>{const t=db.transaction(STORE,'readwrite');t.objectStore(STORE).put(v,KEY);t.oncomplete=()=>{db.close();res()};t.onerror=()=>rej(t.error)})}async function dbForget(){const db=await dbOpen();return new Promise((res,rej)=>{const t=db.transaction(STORE,'readwrite');t.objectStore(STORE).delete(KEY);t.oncomplete=()=>{db.close();res()};t.onerror=()=>rej(t.error)})}
-function route(){let h=location.hash;if(!['#/connect','#/intake','#/queue'].includes(h)){h='#/connect';location.hash=h}document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.getAttribute('href')===h));render()}function render(){const links=document.querySelectorAll('nav a');if(!supported()){links.forEach(a=>a.classList.toggle('hide',a.getAttribute('href')!=='#/connect'));app.innerHTML=`<h1>Unsupported browser</h1><div class="card error"><strong>Practice Files requires current desktop Chrome and a secure page. Files cannot be organized from this browser.</strong></div><div class="card notice"><p>Files never leave this computer. This page is only the tool.</p><p>Nothing is uploaded to GitHub, IHS Drive, or any server.</p><p>File and folder names can contain patient information. They stay on disk and are never logged, synced, or analyzed.</p></div>`;return}links.forEach(a=>a.classList.remove('hide'));({'#/connect':connectView,'#/intake':intakeView,'#/queue':queueView}[location.hash]||connectView)()}
-function demo(){return `<div class="card notice"><strong>DEMO ONLY — fake Case IDs. Not a real case list. Connect a practice folder to work with local files.</strong></div>${['DEMO-0001|2026-01-15','DEMO-0002|2026-01-16'].map(x=>{const [c,d]=x.split('|');return `<div class="card"><h3>${c}</h3><p>${d}</p><p>Scans 0 · Notes 0 · Design 0 · Print 0</p><button class="secondary" data-demo="${c}">Open case in app</button></div>`}).join('')}<div id="demoPanel"></div>`}function bindDemo(){document.querySelectorAll('[data-demo]').forEach(b=>b.onclick=()=>{const p=document.querySelector('#demoPanel');p.innerHTML=`<div class="card"><h2>${esc(b.dataset.demo)}</h2>${buckets.map(x=>`<p><strong>${x[0].toUpperCase()+x.slice(1)} (0)</strong></p><ul></ul>`).join('')}</div>`;p.scrollIntoView({behavior:'smooth'})})}
-function connectView(){shell('Connect practice folder',`${root?`<div class="card"><p>Folder: <strong>${esc(root.name)}</strong></p><p>Permission: <strong>${granted?'Granted':'Reconnect required'}</strong></p><div class="row"><button id="connect">${granted?'Connect practice folder':'Reconnect folder'}</button><button id="forget" class="danger">Forget folder on this browser</button></div></div>`:`<div class="card"><button id="connect">Connect practice folder</button></div>${demo()}`}<div class="card notice">Forgetting the folder only removes this browser's saved connection. It does not delete files.</div>`);document.querySelector('#connect').onclick=choose;if(root)document.querySelector('#forget').onclick=forget;bindDemo()}
-async function choose(){try{let h;if(root&&!granted){const p=await root.requestPermission({mode:'readwrite'});if(p==='granted'){granted=true;await scan();note('Folder access restored.');return}note('Access denied. Use Reconnect folder and grant read and write access.');return}h=await window.showDirectoryPicker({mode:'readwrite'});await dbPut(h);root=h;granted=(await h.queryPermission({mode:'readwrite'}))==='granted';if(granted){await scan();note('Practice folder connected.')}else note('Access denied. Use Reconnect folder and grant read and write access.')}catch(e){if(e&&e.name==='AbortError')note('Folder picker canceled.');else note('Could not connect the practice folder.')}}async function forget(){if(!confirm("Forgetting the folder only removes this browser's saved connection. It does not delete files."))return;try{await dbForget();root=null;granted=false;queue=[];ignored=[];files=[];collisions.clear();note('Folder connection forgotten. Files were not deleted.')}catch(e){note('Could not forget the folder connection.')}}
-function intakeView(){const enabled=root&&granted;shell('Intake files',`<div class="card grid"><div><label for="caseId">Case ID (practice work-order number)</label><input id="caseId" maxlength="80" autocomplete="off"><small>Do not enter patient names, initials, DOB, or chart numbers.</small><div id="caseError"></div></div><div><label for="visit">Visit date</label><input id="visit" type="date" min="2000-01-01" max="${maxDate()}" value="${localDate()}"></div><div><label for="appliance">Appliance type</label><select id="appliance"><option value="">Select</option>${['nightguard','retainer','aligner','crown','bridge','denture','splint','other'].map(x=>`<option>${x}</option>`).join('')}</select></div><div><label for="bucket">Destination bucket</label><select id="bucket"><option value="">Select</option>${buckets.map(x=>`<option value="${x}">${x[0].toUpperCase()+x.slice(1)}</option>`).join('')}</select></div><div class="full"><label for="picker">Files</label><input id="picker" type="file" multiple ${enabled?'':'disabled'}><div id="drop" class="drop" aria-disabled="${enabled?'false':'true'}">${enabled?'Drop files, not folders.':'Connect a practice folder to enable file drop.'}</div><p>Choose files to copy into the connected practice folder. Nothing is uploaded.</p></div></div>${!enabled?'<div class="card error">Connect a practice folder to save files.</div>':''}<div id="review" class="card"><h2>Review before write</h2><p>No files selected.</p></div>`);const c=document.querySelector('#caseId'),p=document.querySelector('#picker'),drop=document.querySelector('#drop');c.oninput=()=>{document.querySelector('#caseError').textContent=c.value&&!validCase(c.value)?'Case ID must be the practice work-order number only — one folder-safe name. Do not use patient names, initials, DOB, or chart numbers.':'';review()};c.onblur=()=>{c.value=c.value.trim();review()};['visit','appliance','bucket'].forEach(id=>document.querySelector('#'+id).onchange=review);p.onchange=()=>{if(enabled)addFiles([...p.files])};drop.ondragover=e=>{if(enabled)e.preventDefault()};drop.ondrop=e=>{e.preventDefault();if(!enabled)return;const list=[...e.dataTransfer.items],hasDir=list.some(i=>{const x=i.webkitGetAsEntry&&i.webkitGetAsEntry();return x&&x.isDirectory});if(hasDir){note('Drop files, not folders.');return}addFiles([...e.dataTransfer.files])};review()}
-function addFiles(a){if(files.length+a.length>100){message='Select 100 files or fewer.';render();return}const good=[];let err='';for(const f of a){if(f.size===0)err='This file is empty and was not copied.';else if(f.size>512*1024*1024)err='This file is larger than 512 MB and was not copied.';else good.push(f)}files.push(...good);if(err)message=err;review()}
-function size(n){if(n<1024)return `${n} B`;if(n<1048576)return `${(n/1024).toFixed(1)} KB`;return `${(n/1048576).toFixed(1)} MB`}async function getDest(create=false){let h=root;h=await h.getDirectoryHandle(document.querySelector('#caseId').value.trim(),{create});h=await h.getDirectoryHandle(document.querySelector('#visit').value,{create});return h.getDirectoryHandle(document.querySelector('#bucket').value,{create})}async function exists(dir,name){try{await dir.getFileHandle(name);return true}catch(e){if(e.name==='NotFoundError')return false;throw e}}
-async function review(){const box=document.querySelector('#review');if(!box)return;collisions.clear();let dir=null;if(root&&granted&&validCase(document.querySelector('#caseId').value)&&realDate(document.querySelector('#visit').value)&&document.querySelector('#bucket').value){try{dir=await getDest(false)}catch(e){if(e.name!=='NotFoundError'){permissionLost(e);return}}}if(dir)for(const f of files)try{collisions.set(f,await exists(dir,f.name))}catch(e){permissionLost(e);return}const collision=[...collisions.values()].some(Boolean),valid=granted&&validCase(document.querySelector('#caseId').value)&&realDate(document.querySelector('#visit').value)&&document.querySelector('#visit').value>='2000-01-01'&&document.querySelector('#visit').value<=maxDate()&&document.querySelector('#appliance').value&&document.querySelector('#bucket').value&&files.length;box.innerHTML=`<h2>Review before write</h2>${files.length?files.map((f,i)=>`<div class="file"><strong>${esc(f.name)}</strong><span>${size(f.size)}</span><span>${esc(document.querySelector('#caseId').value.trim())}/${esc(document.querySelector('#visit').value)}/${esc(document.querySelector('#bucket').value)}/${esc(f.name)}</span><span>${collisions.get(f)?'<span class="badge">Collision</span>':''}<button class="danger" data-remove="${i}">Remove</button></span></div>`).join(''):'<p>No files selected.</p>'}${collision?`<fieldset><legend>Files already exist</legend><label><input style="width:auto" type="radio" name="collision" value="skip"> Skip files that already exist</label><label><input style="width:auto" type="radio" name="collision" value="suffix"> Save with suffix \` (2)\`</label></fieldset>`:''}<button id="save" ${valid&&!collision?'':'disabled'}>Save to practice folder</button>`;box.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{files.splice(Number(b.dataset.remove),1);review()});box.querySelectorAll('[name=collision]').forEach(r=>r.onchange=()=>document.querySelector('#save').disabled=!valid);document.querySelector('#save').onclick=saveBatch}
-function splitName(n){const i=n.lastIndexOf('.');return i>0?[n.slice(0,i),n.slice(i)]:[n,'']}async function freeName(dir,n){if(!await exists(dir,n))return n;const [stem,ext]=splitName(n);for(let i=2;;i++){const c=`${stem} (${i})${ext}`;if(!await exists(dir,c))return c}}
-async function saveBatch(){const total=files.length,choice=document.querySelector('[name=collision]:checked')?.value||'',failed=[],succeeded=new Set();let skipped=0,ok=0,wrote=false;try{const dir=await getDest(true);for(const f of files){try{let name=f.name;if(await exists(dir,name)){if(choice==='skip'){skipped++;continue}name=await freeName(dir,name)}const h=await dir.getFileHandle(name,{create:true});let w=null,closed=false;try{w=await h.createWritable();await w.write(f);await w.close();closed=true;ok++;wrote=true;succeeded.add(f)}finally{if(w&&!closed)try{await w.close()}catch(_){}}}catch(e){failed.push(f)}}files=files.filter(f=>!succeeded.has(f));message=`Saved ${ok} of ${total}. ${skipped} skipped. ${failed.length} failed.`;if(wrote)await scan();render()}catch(e){permissionLost(e)}}
-function permissionLost(){granted=false;queue=[];note('Access denied. Use Reconnect folder and grant read and write access. Disk is untouched.')}
-async function scan(){if(!root||!granted||scanning)return;scanning=true;const out=[],bad=[];try{for await(const ce of root.values()){if(ce.kind!=='directory'||!validCase(ce.name)){bad.push(ce.name);continue}const visits=[];for await(const ve of ce.values()){if(ve.kind!=='directory'||!realDate(ve.name)){bad.push(ve.name);continue}const counts={scans:0,notes:0,design:0,print:0},found={scans:[],notes:[],design:[],print:[]};for await(const be of ve.values()){if(be.kind!=='directory'||!buckets.includes(be.name)){bad.push(be.name);continue}for await(const fe of be.values()){if(fe.kind==='file'){const f=await fe.getFile();counts[be.name]++;found[be.name].push({name:fe.name,size:f.size})}else bad.push(fe.name)}}visits.push({date:ve.name,counts,files:found})}visits.sort((a,b)=>b.date.localeCompare(a.date));out.push({caseId:ce.name,visits})}out.sort((a,b)=>a.caseId.localeCompare(b.caseId));queue=out;ignored=bad;scannedAt=new Date();scanning=false}catch(e){scanning=false;permissionLost(e)}}
-function queueView(){if(!root||!granted){shell('Queue',`${demo()}<div class="card notice">External folder changes appear after Refresh from disk; this app does not watch continuously.</div>`);bindDemo();return}shell('Queue',`<div class="card notice">External folder changes appear after Refresh from disk; this app does not watch continuously.</div><div class="card row"><span>${scannedAt?`Last scanned ${scannedAt.toLocaleTimeString('en-US')}`:'Not scanned yet'}</span><button id="refresh" class="secondary">Refresh from disk</button></div>${queue.length?queue.map((c,i)=>`<div class="card case"><strong>${esc(c.caseId)}</strong><span>${c.visits.length} visit(s)</span><span>${c.visits.map(v=>`${v.date}: ${buckets.map(b=>`${b} ${v.counts[b]}`).join(' · ')}`).join('<br>')}</span><button data-open="${i}" class="secondary">Open case in app</button></div>`).join(''):'<div class="card">No files were found in the expected case folders. Refresh after files are added.</div>'}${ignored.length?`<div class="card"><h2>Ignored folders (unexpected name or layout)</h2><ul>${ignored.map(n=>`<li>${esc(n)}</li>`).join('')}</ul></div>`:''}<div id="casePanel"></div>`);document.querySelector('#refresh').onclick=async()=>{await scan();render()};document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openCase(Number(b.dataset.open)))}function openCase(i){const c=queue[i],p=document.querySelector('#casePanel');p.innerHTML=`<div class="card"><h2>${esc(c.caseId)}</h2>${c.visits.map(v=>`<h3>${v.date}</h3>${buckets.map(b=>`<p><strong>${b[0].toUpperCase()+b.slice(1)} (${v.counts[b]})</strong></p><ul>${v.files[b].map(f=>`<li>${esc(f.name)} — ${size(f.size)}</li>`).join('')}</ul>`).join('')}`).join('')}</div>`;p.scrollIntoView({behavior:'smooth'})}
-async function init(){if(!supported()){route();return}try{root=await dbGet();if(root){granted=(await root.queryPermission({mode:'readwrite'}))==='granted';if(granted)await scan()}}catch(e){message='Could not read the saved folder connection.'}route()}window.addEventListener('hashchange',route);window.addEventListener('resize',render);document.addEventListener('visibilitychange',async()=>{if(document.visibilityState==='visible'&&root&&granted){await scan();render()}});init();
-})();</script></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#10141c">
+<meta name="description" content="IHS Practice Files — connect a practice folder on this PC. Files stay on disk. Not a patient chart.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'self'; form-action 'none'; connect-src 'none'; worker-src 'none'; manifest-src 'none'; font-src 'none'; object-src 'none'; frame-src 'none'">
+<base href="/practice-files/">
+<title>IHS Practice Files</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+:root {
+  --bone: #f3eee4;
+  --bone-2: #ebe4d6;
+  --ink: #111111;
+  --muted: #5a574e;
+  --navy: #10141c;
+  --mint: #7fe0b8;
+  --line: rgba(17, 17, 17, 0.18);
+  --max: 960px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--bone);
+  background-image:
+    linear-gradient(rgba(16, 20, 28, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 20, 28, 0.045) 1px, transparent 1px);
+  background-size: 28px 28px;
+  line-height: 1.45;
+}
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--navy);
+  color: var(--bone);
+  padding: 12px 16px;
+}
+.nav-in {
+  max-width: var(--max);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+}
+.brand {
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.mark {
+  display: inline-grid;
+  place-items: center;
+  min-width: 46px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--mint);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  border: 1px solid rgba(127, 224, 184, 0.45);
+}
+.brand-name { font-weight: 600; }
+nav a {
+  color: var(--bone);
+  text-decoration: none;
+  padding: 10px 12px;
+  border-radius: 999px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+nav a.active {
+  background: var(--mint);
+  color: var(--navy);
+  font-weight: 700;
+}
+main, footer { max-width: var(--max); margin: 0 auto; padding: 22px 16px; }
+h1, h2, h3 { font-family: Georgia, "Times New Roman", Times, serif; font-weight: 400; }
+h1 { font-size: 2rem; margin: 0 0 8px; letter-spacing: -0.02em; }
+h2 { font-size: 1.25rem; margin: 0 0 12px; }
+h3 { font-size: 1.05rem; margin: 16px 0 8px; }
+.lede { color: var(--muted); margin: 0 0 18px; max-width: 42em; }
+.card {
+  background: var(--bone-2);
+  border-radius: 12px;
+  padding: 18px;
+  margin: 0 0 16px;
+}
+.notice { border-left: 5px solid var(--navy); }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.full { grid-column: 1 / -1; }
+label { display: block; font-weight: 700; margin-bottom: 5px; }
+input, select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+  padding: 9px;
+  background: var(--bone);
+  color: var(--ink);
+  font: inherit;
+}
+fieldset {
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+}
+legend { font-weight: 700; padding: 0 6px; }
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  min-height: 44px;
+}
+.choice input { width: auto; min-height: 22px; }
+button, .button {
+  min-height: 44px;
+  border-radius: 999px;
+  padding: 10px 17px;
+  border: 1px solid var(--ink);
+  background: var(--navy);
+  color: var(--mint);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.secondary { background: var(--bone-2); color: var(--ink); }
+.danger { background: var(--ink); color: var(--bone); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+nav a:focus-visible { outline-color: var(--mint); }
+.row { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
+.file-row, .case-row {
+  display: grid;
+  grid-template-columns: 1.3fr 0.6fr 2fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.drop {
+  border: 2px dashed var(--navy);
+  padding: 28px;
+  text-align: center;
+  border-radius: 12px;
+  margin-top: 10px;
+}
+.drop.is-off { opacity: 0.55; }
+.muted, small { color: var(--muted); }
+.error {
+  color: var(--ink);
+  font-weight: 700;
+  border: 2px solid var(--ink);
+  padding: 10px;
+  border-radius: 8px;
+}
+.flash { font-weight: 700; }
+.badge {
+  display: inline-block;
+  background: var(--navy);
+  color: var(--mint);
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.badge-warn { background: var(--ink); color: var(--bone); }
+.field-error { font-weight: 700; margin: 6px 0 0; min-height: 1.2em; }
+.log { margin: 0; padding-left: 1.2em; }
+.log li { margin: 6px 0; }
+.hide { display: none !important; }
+footer {
+  font-size: 0.9rem;
+  border-top: 1px solid var(--ink);
+  margin-top: 24px;
+}
+@media (max-width: 800px) {
+  .grid, .file-row, .case-row { grid-template-columns: 1fr; }
+  .nav-in { gap: 4px; }
+  .brand { width: 100%; }
+}
+</style>
+</head>
+<body>
+<nav>
+  <div class="nav-in">
+    <div class="brand"><span class="mark">IHS</span><span class="brand-name">Practice Files</span></div>
+    <a href="#/connect">Connect</a>
+    <a href="#/intake">Intake</a>
+    <a href="#/queue">Queue</a>
+  </div>
+</nav>
+<main id="app"></main>
+<footer>
+  <p><strong>Public website shell. Do not enter patient names, initials, DOB, identifying chart numbers, or other patient identifiers.</strong></p>
+  <p><strong>Use only the practice's non-patient Case ID.</strong></p>
+  <p><strong>This app is not HIPAA certified and does not claim HIPAA compliance.</strong></p>
+</footer>
+<script>
+(() => {
+  'use strict';
+
+  const BUCKETS = ['scans', 'notes', 'design', 'print'];
+  const ROUTES = ['#/connect', '#/intake', '#/queue'];
+  const DEMO = [
+    { caseId: 'DEMO-0001', date: '2026-01-15' },
+    { caseId: 'DEMO-0002', date: '2026-01-16' }
+  ];
+  const DB_NAME = 'ihs-files-v1';
+  const DB_STORE = 'handles';
+  const DB_KEY = 'practiceRoot';
+  const MAX_FILES = 100;
+  const MAX_BYTES = 512 * 1024 * 1024;
+  const MIN_DATE = '2000-01-01';
+  const NARROW = '(max-width: 800px)';
+  const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+  const UNSAFE_NAME = /[\\/<>:"|?*\x00-\x1f\x7f]/;
+  const TRAILING_BAD = /[. ]$/;
+  const RESERVED = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?$/i;
+
+  const app = document.querySelector('#app');
+
+  const state = {
+    root: null,
+    granted: false,
+    scanning: false,
+    saving: false,
+    queue: [],
+    ignored: [],
+    scannedAt: null,
+    flash: '',
+    flashKind: ''
+  };
+
+  const intake = {
+    caseId: '',
+    visit: '',
+    bucket: '',
+    files: [],
+    collision: '',
+    results: null
+  };
+
+  let fileSeq = 0;
+  let reviewGen = 0;
+  let lastSupport = null;
+  let demoOpen = null;
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function localDate(d) {
+    d = d || new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  function maxVisitDate() {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return localDate(d);
+  }
+
+  function parseLocalDate(s) {
+    const m = DATE_RE.exec(String(s));
+    if (!m) return null;
+    return new Date(+m[1], +m[2] - 1, +m[3]);
+  }
+
+  function isLocalDate(s) {
+    const d = parseLocalDate(s);
+    if (!d) return false;
+    const m = DATE_RE.exec(String(s));
+    return d.getFullYear() === +m[1] && d.getMonth() === +m[2] - 1 && d.getDate() === +m[3];
+  }
+
+  function validVisit(s) {
+    return isLocalDate(s) && s >= MIN_DATE && s <= maxVisitDate();
+  }
+
+  function validCaseId(v) {
+    v = String(v).trim();
+    return v.length >= 1 && v.length <= 80 &&
+      v !== '.' && v !== '..' &&
+      !UNSAFE_NAME.test(v) &&
+      !TRAILING_BAD.test(v) &&
+      !RESERVED.test(v);
+  }
+
+  function validFileName(name) {
+    name = String(name);
+    return name.length >= 1 && name.length <= 240 &&
+      name !== '.' && name !== '..' &&
+      !UNSAFE_NAME.test(name) &&
+      !TRAILING_BAD.test(name) &&
+      !RESERVED.test(name);
+  }
+
+  function validBucket(s) {
+    return BUCKETS.indexOf(s) !== -1;
+  }
+
+  function destReady() {
+    return validCaseId(intake.caseId) && validVisit(intake.visit) && validBucket(intake.bucket);
+  }
+
+  function isSupported() {
+    return typeof window.showDirectoryPicker === 'function' &&
+      window.isSecureContext === true &&
+      !window.matchMedia(NARROW).matches;
+  }
+
+  function canWrite() {
+    return !!(state.root && state.granted);
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, ch => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+  }
+
+  function prettySize(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+    return (n / 1048576).toFixed(1) + ' MB';
+  }
+
+  function bucketLabel(name) {
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  }
+
+  function isPermissionError(err) {
+    return !!(err && (err.name === 'NotAllowedError' || err.name === 'SecurityError'));
+  }
+
+  function setFlash(text, kind) {
+    state.flash = text || '';
+    state.flashKind = kind || '';
+  }
+
+  function consumeFlash() {
+    const html = state.flash
+      ? '<div id="flash" class="card flash' + (state.flashKind === 'error' ? ' error' : '') + '" role="status">' + esc(state.flash) + '</div>'
+      : '<div id="flash" class="hide" role="status"></div>';
+    state.flash = '';
+    state.flashKind = '';
+    return html;
+  }
+
+  function paintFlash() {
+    const el = document.querySelector('#flash');
+    if (!el) return;
+    if (!state.flash) {
+      el.className = 'hide';
+      el.textContent = '';
+      return;
+    }
+    el.className = 'card flash' + (state.flashKind === 'error' ? ' error' : '');
+    el.textContent = state.flash;
+    state.flash = '';
+    state.flashKind = '';
+  }
+
+  function privacyCard() {
+    return '<div class="card notice">' +
+      '<p>Files never leave this computer. This page is only the tool.</p>' +
+      '<p>Nothing is uploaded to GitHub, IHS Drive, or any server.</p>' +
+      '<p>Chrome: connect a practice folder on this PC. You may need to grant access again after a restart.</p>' +
+      '<p>File and folder names can contain patient information. They stay on disk and are never logged, synced, or analyzed.</p>' +
+      '</div>';
+  }
+
+  function demoCard() {
+    const cards = DEMO.map(item => {
+      return '<div class="card">' +
+        '<h3>' + esc(item.caseId) + '</h3>' +
+        '<p>' + esc(item.date) + '</p>' +
+        '<p>Scans 0 · Notes 0 · Design 0 · Print 0</p>' +
+        '<button type="button" class="secondary" data-demo="' + esc(item.caseId) + '">Open case in app</button>' +
+        '</div>';
+    }).join('');
+    return '<div class="card notice"><strong>DEMO ONLY — fake Case IDs. Not a real case list. Connect a practice folder to work with local files.</strong></div>' +
+      cards +
+      '<div id="demoPanel"></div>';
+  }
+
+  function bindDemo() {
+    document.querySelectorAll('[data-demo]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        demoOpen = btn.getAttribute('data-demo');
+        const panel = document.querySelector('#demoPanel');
+        if (!panel) return;
+        panel.innerHTML = '<div class="card"><h2>' + esc(demoOpen) + '</h2>' +
+          BUCKETS.map(b => '<p><strong>' + bucketLabel(b) + ' (0)</strong></p><ul></ul>').join('') +
+          '</div>';
+        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    });
+  }
+
+  function idbOpen() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(DB_STORE)) {
+          req.result.createObjectStore(DB_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function idbGet() {
+    const db = await idbOpen();
+    try {
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, 'readonly');
+        const req = tx.objectStore(DB_STORE).get(DB_KEY);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      });
+    } finally {
+      db.close();
+    }
+  }
+
+  async function idbPut(value) {
+    const db = await idbOpen();
+    try {
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, 'readwrite');
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.objectStore(DB_STORE).put(value, DB_KEY);
+      });
+    } finally {
+      db.close();
+    }
+  }
+
+  async function idbDelete() {
+    const db = await idbOpen();
+    try {
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, 'readwrite');
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.objectStore(DB_STORE).delete(DB_KEY);
+      });
+    } finally {
+      db.close();
+    }
+  }
+
+  async function queryGranted(handle) {
+    if (!handle || typeof handle.queryPermission !== 'function') return false;
+    try {
+      return (await handle.queryPermission({ mode: 'readwrite' })) === 'granted';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function requestGranted(handle) {
+    if (!handle || typeof handle.requestPermission !== 'function') return false;
+    try {
+      return (await handle.requestPermission({ mode: 'readwrite' })) === 'granted';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function goConnect() {
+    if (location.hash !== '#/connect') location.hash = '#/connect';
+    else render();
+  }
+
+  function permissionLost(message) {
+    state.granted = false;
+    state.queue = [];
+    state.ignored = [];
+    state.scannedAt = null;
+    setFlash(message || 'Access denied. Use Connect to grant read and write access. The saved folder was kept. Disk writes that did not finish are not treated as saved.', 'error');
+    goConnect();
+  }
+
+  async function connectFolder() {
+    try {
+      const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      await idbPut(handle);
+      state.root = handle;
+      state.granted = await queryGranted(handle);
+      if (state.granted) {
+        await scan();
+        setFlash('Practice folder connected. Files stay on this computer.');
+      } else {
+        setFlash('This browser did not grant read and write access. Use Grant access, then try again. The folder connection was kept.', 'error');
+      }
+      render();
+    } catch (e) {
+      if (e && e.name === 'AbortError') setFlash('Folder picker canceled.');
+      else setFlash('Could not connect the practice folder.', 'error');
+      render();
+    }
+  }
+
+  async function grantAccess() {
+    if (!state.root) return;
+    const ok = await requestGranted(state.root);
+    state.granted = ok;
+    if (ok) {
+      await scan();
+      setFlash('Folder access restored.');
+    } else {
+      setFlash('Access denied. The saved folder was kept. Files were not deleted.', 'error');
+    }
+    render();
+  }
+
+  async function forgetFolder() {
+    const ok = window.confirm("Forgetting the folder only removes this browser's saved connection. It does not delete files.");
+    if (!ok) return;
+    try {
+      await idbDelete();
+      state.root = null;
+      state.granted = false;
+      state.queue = [];
+      state.ignored = [];
+      state.scannedAt = null;
+      intake.files = [];
+      intake.results = null;
+      setFlash('Folder connection forgotten. Files were not deleted.');
+      render();
+    } catch (e) {
+      setFlash('Could not forget the folder connection.', 'error');
+      render();
+    }
+  }
+
+  async function fileExists(dir, name) {
+    try {
+      await dir.getFileHandle(name);
+      return true;
+    } catch (e) {
+      if (e && e.name === 'NotFoundError') return false;
+      throw e;
+    }
+  }
+
+  async function getDest(create) {
+    const caseId = intake.caseId.trim();
+    const visit = intake.visit;
+    const bucket = intake.bucket;
+    if (!state.root || !state.granted) {
+      const err = new Error('no-access');
+      err.name = 'NotAllowedError';
+      throw err;
+    }
+    if (!validCaseId(caseId) || !validVisit(visit) || !validBucket(bucket)) {
+      throw new Error('invalid-dest');
+    }
+    let dir = state.root;
+    dir = await dir.getDirectoryHandle(caseId, { create: !!create });
+    dir = await dir.getDirectoryHandle(visit, { create: !!create });
+    dir = await dir.getDirectoryHandle(bucket, { create: !!create });
+    return dir;
+  }
+
+  function splitName(name) {
+    const i = name.lastIndexOf('.');
+    if (i > 0) return { stem: name.slice(0, i), ext: name.slice(i) };
+    return { stem: name, ext: '' };
+  }
+
+  async function freeName(dir, name, used) {
+    if (!used.has(name) && !(await fileExists(dir, name))) return name;
+    const parts = splitName(name);
+    for (let i = 2; i < 1000; i++) {
+      const candidate = parts.stem + ' (' + i + ')' + parts.ext;
+      if (!used.has(candidate) && !(await fileExists(dir, candidate))) return candidate;
+    }
+    throw new Error('no-free-name');
+  }
+
+  async function copyFile(dir, name, file) {
+    let created = false;
+    try {
+      const handle = await dir.getFileHandle(name, { create: true });
+      created = true;
+      const writable = await handle.createWritable();
+      if (typeof file.stream === 'function') {
+        await file.stream().pipeTo(writable);
+      } else {
+        await writable.write(file);
+        await writable.close();
+      }
+      return true;
+    } catch (err) {
+      if (created) {
+        try { await dir.removeEntry(name); } catch (_) {}
+      }
+      throw err;
+    }
+  }
+
+  async function scan() {
+    if (!state.root || !state.granted || state.scanning) return;
+    state.scanning = true;
+    const out = [];
+    const bad = [];
+    try {
+      for await (const caseEntry of state.root.values()) {
+        if (caseEntry.kind !== 'directory' || !validCaseId(caseEntry.name)) {
+          bad.push(caseEntry.name);
+          continue;
+        }
+        const visits = [];
+        for await (const visitEntry of caseEntry.values()) {
+          if (visitEntry.kind !== 'directory' || !isLocalDate(visitEntry.name)) {
+            bad.push(visitEntry.name);
+            continue;
+          }
+          const counts = { scans: 0, notes: 0, design: 0, print: 0 };
+          const files = { scans: [], notes: [], design: [], print: [] };
+          for await (const bucketEntry of visitEntry.values()) {
+            if (bucketEntry.kind !== 'directory' || !validBucket(bucketEntry.name)) {
+              bad.push(bucketEntry.name);
+              continue;
+            }
+            for await (const fileEntry of bucketEntry.values()) {
+              if (fileEntry.kind !== 'file') {
+                bad.push(fileEntry.name);
+                continue;
+              }
+              const blob = await fileEntry.getFile();
+              counts[bucketEntry.name] += 1;
+              files[bucketEntry.name].push({ name: fileEntry.name, size: blob.size });
+            }
+            files[bucketEntry.name].sort((a, b) => a.name.localeCompare(b.name));
+          }
+          visits.push({ date: visitEntry.name, counts: counts, files: files });
+        }
+        visits.sort((a, b) => b.date.localeCompare(a.date));
+        out.push({ caseId: caseEntry.name, visits: visits });
+      }
+      out.sort((a, b) => a.caseId.localeCompare(b.caseId));
+      state.queue = out;
+      state.ignored = bad;
+      state.scannedAt = new Date();
+    } catch (e) {
+      state.scanning = false;
+      if (isPermissionError(e)) permissionLost();
+      else setFlash('Could not read the practice folder.', 'error');
+      return;
+    }
+    state.scanning = false;
+  }
+
+  function addFiles(list) {
+    const incoming = Array.from(list || []);
+    if (!incoming.length) return;
+    if (intake.files.length + incoming.length > MAX_FILES) {
+      setFlash('Select 100 files or fewer.', 'error');
+      paintFlash();
+      return;
+    }
+    const problems = [];
+    incoming.forEach(file => {
+      if (!file || file.size === 0) {
+        problems.push((file && file.name ? file.name : 'File') + ' was not added because it is empty.');
+        return;
+      }
+      if (file.size > MAX_BYTES) {
+        problems.push(file.name + ' was not added because it is larger than 512 MB.');
+        return;
+      }
+      if (!validFileName(file.name)) {
+        problems.push((file.name || 'File') + ' was not added because its name is not folder-safe.');
+        return;
+      }
+      fileSeq += 1;
+      intake.files.push({ id: fileSeq, file: file });
+    });
+    intake.results = null;
+    if (problems.length) {
+      setFlash(problems[0], 'error');
+      paintFlash();
+    }
+    refreshReview();
+  }
+
+  function dropHasDirectory(event) {
+    const items = event.dataTransfer && event.dataTransfer.items;
+    if (!items || !items.length) return false;
+    return Array.from(items).some(item => {
+      if (typeof item.webkitGetAsEntry !== 'function') return false;
+      const entry = item.webkitGetAsEntry();
+      return !!(entry && entry.isDirectory);
+    });
+  }
+
+  function destPathFor(name) {
+    const caseId = intake.caseId.trim();
+    const visit = intake.visit;
+    const bucket = intake.bucket;
+    const parts = [
+      validCaseId(caseId) ? caseId : 'CaseID',
+      validVisit(visit) ? visit : 'VisitDate',
+      validBucket(bucket) ? bucket : '{scans|notes|design|print}',
+      name || 'filename'
+    ];
+    return parts.join('/');
+  }
+
+  function inBatchClash(name, id) {
+    return intake.files.some(item => item.id !== id && item.file.name === name);
+  }
+
+  async function refreshReview() {
+    const box = document.querySelector('#review');
+    if (!box) return;
+    const gen = ++reviewGen;
+    const enabled = canWrite();
+    const ready = destReady();
+    let dir = null;
+    const existsMap = new Map();
+
+    if (enabled && ready && intake.files.length) {
+      try {
+        dir = await getDest(false);
+      } catch (e) {
+        if (gen !== reviewGen) return;
+        if (e && e.name === 'NotFoundError') dir = null;
+        else if (e && e.message === 'invalid-dest') dir = null;
+        else if (isPermissionError(e)) {
+          permissionLost();
+          return;
+        } else {
+          box.innerHTML = '<h2>Review before write</h2><p class="error">Could not check the destination folder.</p>';
+          return;
+        }
+      }
+      if (dir) {
+        for (const item of intake.files) {
+          try {
+            existsMap.set(item.id, await fileExists(dir, item.file.name));
+          } catch (e) {
+            if (gen !== reviewGen) return;
+            if (isPermissionError(e)) {
+              permissionLost();
+              return;
+            }
+            existsMap.set(item.id, false);
+          }
+        }
+      }
+    }
+    if (gen !== reviewGen) return;
+
+    const rows = intake.files.map(item => {
+      const clash = !!(existsMap.get(item.id) || inBatchClash(item.file.name, item.id));
+      return '<div class="file-row">' +
+        '<strong>' + esc(item.file.name) + '</strong>' +
+        '<span>' + prettySize(item.file.size) + '</span>' +
+        '<span>' + esc(destPathFor(item.file.name)) + '</span>' +
+        '<span>' + (clash ? '<span class="badge badge-warn">Collision</span> ' : '') +
+        '<button type="button" class="danger" data-remove="' + item.id + '">Remove</button></span>' +
+        '</div>';
+    }).join('');
+
+    const hasClash = intake.files.some(item => existsMap.get(item.id) || inBatchClash(item.file.name, item.id));
+    const choiceOk = !hasClash || intake.collision === 'skip' || intake.collision === 'suffix';
+    const canSave = enabled && ready && intake.files.length && choiceOk && !state.saving;
+
+    let html = '<h2>Review before write</h2>';
+    html += intake.files.length ? rows : '<p>No files selected.</p>';
+    if (hasClash) {
+      html += '<fieldset><legend>Files already exist, or two selected files share a name</legend>' +
+        '<label class="choice"><input type="radio" name="collision" value="skip"' + (intake.collision === 'skip' ? ' checked' : '') + '> Skip files that already exist</label>' +
+        '<label class="choice"><input type="radio" name="collision" value="suffix"' + (intake.collision === 'suffix' ? ' checked' : '') + '> Save with suffix <code> (2)</code></label>' +
+        '</fieldset>';
+    }
+    html += '<button type="button" id="save"' + (canSave ? '' : ' disabled') + '>' +
+      (state.saving ? 'Saving…' : 'Save to practice folder') + '</button>';
+    html += '<div id="copyLog"></div>';
+    if (intake.results) html += renderResults(intake.results);
+
+    box.innerHTML = html;
+    box.querySelectorAll('[data-remove]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = Number(btn.getAttribute('data-remove'));
+        intake.files = intake.files.filter(item => item.id !== id);
+        intake.results = null;
+        refreshReview();
+      });
+    });
+    box.querySelectorAll('[name=collision]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        intake.collision = radio.value;
+        refreshReview();
+      });
+    });
+    const save = box.querySelector('#save');
+    if (save) save.addEventListener('click', saveBatch);
+  }
+
+  function renderResults(results) {
+    if (!results || !results.length) return '';
+    const items = results.map(r => {
+      const label = r.status === 'saved' ? 'Saved' : r.status === 'skipped' ? 'Skipped' : 'Failed';
+      const cls = r.status === 'failed' ? 'badge-warn' : '';
+      const detail = r.detail ? ' — ' + esc(r.detail) : '';
+      return '<li><span class="badge ' + cls + '">' + label + '</span> ' + esc(r.name) + detail + '</li>';
+    }).join('');
+    return '<h2>Copy results</h2><ul class="log">' + items + '</ul>';
+  }
+
+  function appendLog(text, kind) {
+    const log = document.querySelector('#copyLog');
+    if (!log) return;
+    if (!log.querySelector('ul')) {
+      log.innerHTML = '<h2>Copy progress</h2><ul class="log"></ul>';
+    }
+    const ul = log.querySelector('ul');
+    const label = kind === 'saved' ? 'Saved' : kind === 'skipped' ? 'Skipped' : 'Failed';
+    const cls = kind === 'failed' ? 'badge-warn' : '';
+    const li = document.createElement('li');
+    li.innerHTML = '<span class="badge ' + cls + '">' + label + '</span> ' + esc(text);
+    ul.appendChild(li);
+  }
+
+  async function saveBatch() {
+    if (state.saving) return;
+    if (!canWrite()) {
+      setFlash('Connect a practice folder and grant access before saving.', 'error');
+      paintFlash();
+      return;
+    }
+    if (!destReady()) {
+      setFlash('Enter a folder-safe Case ID, a real visit date (YYYY-MM-DD), and a bucket before creating folders.', 'error');
+      paintFlash();
+      return;
+    }
+    if (!intake.files.length) return;
+
+    state.saving = true;
+    intake.results = null;
+    const saveBtn = document.querySelector('#save');
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving…';
+    }
+
+    const results = [];
+    const used = new Set();
+    let dir = null;
+    try {
+      dir = await getDest(true);
+    } catch (e) {
+      state.saving = false;
+      if (isPermissionError(e)) {
+        permissionLost('Access denied. Use Connect to grant read and write access. No files were marked as saved.');
+        return;
+      }
+      setFlash('Could not create the destination folders. Case ID and visit date must be folder-safe. Nothing was marked as saved.', 'error');
+      render();
+      return;
+    }
+
+    for (const item of intake.files) {
+      const original = item.file.name;
+      try {
+        if (!validFileName(original)) {
+          results.push({ id: item.id, name: original, status: 'failed', detail: 'File name is not folder-safe.' });
+          appendLog(original + ' — file name is not folder-safe.', 'failed');
+          continue;
+        }
+        let name = original;
+        const taken = used.has(name) || (await fileExists(dir, name));
+        if (taken) {
+          if (intake.collision === 'skip') {
+            results.push({ id: item.id, name: original, status: 'skipped', detail: 'Already exists.' });
+            appendLog(original + ' — skipped (already exists).', 'skipped');
+            continue;
+          }
+          if (intake.collision === 'suffix') {
+            name = await freeName(dir, name, used);
+          } else {
+            results.push({ id: item.id, name: original, status: 'failed', detail: 'Choose skip or suffix before writing.' });
+            appendLog(original + ' — choose skip or suffix before writing.', 'failed');
+            continue;
+          }
+        }
+        await copyFile(dir, name, item.file);
+        used.add(name);
+        results.push({ id: item.id, name: name, status: 'saved' });
+        appendLog(name, 'saved');
+      } catch (e) {
+        if (isPermissionError(e)) {
+          results.push({ id: item.id, name: original, status: 'failed', detail: 'Access denied. Not marked as saved.' });
+          appendLog(original + ' — access denied. Not marked as saved.', 'failed');
+          intake.files.forEach(rest => {
+            if (rest.id === item.id) return;
+            if (results.some(r => r.id === rest.id)) return;
+            results.push({ id: rest.id, name: rest.file.name, status: 'failed', detail: 'Stopped after access was denied. Not marked as saved.' });
+            appendLog(rest.file.name + ' — stopped after access was denied. Not marked as saved.', 'failed');
+          });
+          break;
+        }
+        results.push({ id: item.id, name: original, status: 'failed', detail: 'Write failed. Incomplete file was not kept as saved.' });
+        appendLog(original + ' — write failed. Incomplete file was not kept as saved.', 'failed');
+      }
+    }
+
+    const keep = new Set(results.filter(r => r.status === 'failed').map(r => r.id));
+    intake.files = intake.files.filter(item => keep.has(item.id));
+    intake.results = results;
+
+    const saved = results.filter(r => r.status === 'saved').length;
+    const skipped = results.filter(r => r.status === 'skipped').length;
+    const failed = results.filter(r => r.status === 'failed').length;
+    setFlash('Saved ' + saved + ' of ' + results.length + '. ' + skipped + ' skipped. ' + failed + ' failed. Failed writes are not treated as queued.');
+
+    const lost = results.some(r => r.detail && r.detail.indexOf('Access denied') !== -1);
+    state.saving = false;
+    if (lost) {
+      permissionLost('Access denied during copy. Finished writes that closed successfully were kept on disk. Incomplete writes were not marked as saved.');
+      return;
+    }
+    if (state.granted) {
+      try { await scan(); } catch (_) {}
+    }
+    render();
+  }
+
+  function updateNav(hash) {
+    document.querySelectorAll('nav a').forEach(a => {
+      const href = a.getAttribute('href');
+      a.classList.toggle('active', href === hash);
+      if (!isSupported()) a.classList.toggle('hide', href !== '#/connect');
+      else a.classList.remove('hide');
+    });
+  }
+
+  function unsupportedView() {
+    app.innerHTML = '<h1>Unsupported browser</h1>' +
+      '<p class="lede">Practice Files copies onto a folder on this computer. That needs desktop Chrome and a secure page.</p>' +
+      '<div class="card error"><strong>Practice Files requires current desktop Chrome and a secure page. Files cannot be organized from this browser.</strong></div>' +
+      privacyCard();
+  }
+
+  function connectView() {
+    let body = '';
+    if (state.root) {
+      body += '<div class="card">' +
+        '<p>Folder: <strong>' + esc(state.root.name || 'practice folder') + '</strong></p>' +
+        '<p>Permission: <strong>' + (state.granted ? 'Granted' : 'Reconnect required') + '</strong></p>' +
+        '<div class="row">' +
+        (state.granted
+          ? '<button type="button" id="connect">Connect a different folder</button>'
+          : '<button type="button" id="grant">Grant access</button><button type="button" id="connect" class="secondary">Connect a different folder</button>') +
+        '<button type="button" id="forget" class="danger">Forget folder on this browser</button>' +
+        '</div></div>';
+    } else {
+      body += '<div class="card"><button type="button" id="connect">Connect practice folder</button></div>';
+      body += demoCard();
+    }
+    body += '<div class="card notice">Forgetting the folder only removes this browser\'s saved connection. It does not delete files.</div>';
+
+    app.innerHTML = '<h1>Connect practice folder</h1>' +
+      '<p class="lede">Connect a practice folder on this computer. Selected files are copied into Case ID / visit date / bucket on disk. Nothing is uploaded.</p>' +
+      consumeFlash() + privacyCard() + body;
+
+    const connect = document.querySelector('#connect');
+    if (connect) connect.addEventListener('click', connectFolder);
+    const grant = document.querySelector('#grant');
+    if (grant) grant.addEventListener('click', grantAccess);
+    const forget = document.querySelector('#forget');
+    if (forget) forget.addEventListener('click', forgetFolder);
+    if (!state.root) bindDemo();
+  }
+
+  function intakeView() {
+    const enabled = canWrite();
+    const caseError = intake.caseId && !validCaseId(intake.caseId)
+      ? 'Case ID must be the practice work-order number only — one folder-safe name. Do not use patient names, initials, DOB, or chart numbers. Rejected: path separators, .., Windows reserved names, control characters, trailing spaces or periods.'
+      : '';
+    const visitError = intake.visit && !validVisit(intake.visit)
+      ? 'Visit date must be a real calendar day in YYYY-MM-DD form.'
+      : '';
+    const buckets = BUCKETS.map(b =>
+      '<option value="' + b + '"' + (intake.bucket === b ? ' selected' : '') + '>' + bucketLabel(b) + '</option>'
+    ).join('');
+
+    let gate = '';
+    if (!state.root) {
+      gate = '<div class="card error">Connect a practice folder to save files.</div>';
+    } else if (!state.granted) {
+      gate = '<div class="card error"><p>This browser still has the folder connection, but permission is not granted. Request access from a button click. The saved folder is not discarded.</p>' +
+        '<div class="row"><button type="button" id="grant">Grant access</button></div></div>';
+    }
+
+    app.innerHTML = '<h1>Intake files</h1>' +
+      '<p class="lede">Copy selected files into <strong>CaseID/VisitDate/{scans, notes, design, print}</strong>. Review the destination before anything is written. Files never leave this computer.</p>' +
+      consumeFlash() + privacyCard() +
+      '<div class="card grid">' +
+      '<div><label for="caseId">Case ID (practice work-order number)</label>' +
+      '<input id="caseId" maxlength="80" autocomplete="off" spellcheck="false" value="' + esc(intake.caseId) + '">' +
+      '<small>Do not enter patient names, initials, DOB, or chart numbers.</small>' +
+      '<div id="caseError" class="field-error">' + esc(caseError) + '</div></div>' +
+      '<div><label for="visit">Visit date</label>' +
+      '<input id="visit" type="date" min="' + MIN_DATE + '" max="' + maxVisitDate() + '" value="' + esc(intake.visit) + '">' +
+      '<div id="visitError" class="field-error">' + esc(visitError) + '</div></div>' +
+      '<div><label for="bucket">Destination bucket</label>' +
+      '<select id="bucket"><option value="">Select</option>' + buckets + '</select></div>' +
+      '<div class="full"><label for="picker">Files</label>' +
+      '<input id="picker" type="file" multiple' + (enabled ? '' : ' disabled') + '>' +
+      '<div id="drop" class="drop' + (enabled ? '' : ' is-off') + '" aria-disabled="' + (enabled ? 'false' : 'true') + '">' +
+      (enabled ? 'Drop files, not folders.' : 'Connect a practice folder to enable file drop.') +
+      '</div>' +
+      '<p>Choose files to copy into the connected practice folder. Nothing is uploaded.</p></div></div>' +
+      gate +
+      '<div id="review" class="card"><h2>Review before write</h2><p>No files selected.</p></div>';
+
+    const caseId = document.querySelector('#caseId');
+    const visit = document.querySelector('#visit');
+    const bucket = document.querySelector('#bucket');
+    const picker = document.querySelector('#picker');
+    const drop = document.querySelector('#drop');
+    const caseErrorEl = document.querySelector('#caseError');
+    const visitErrorEl = document.querySelector('#visitError');
+    const grant = document.querySelector('#grant');
+
+    caseId.addEventListener('input', () => {
+      intake.caseId = caseId.value;
+      caseErrorEl.textContent = intake.caseId && !validCaseId(intake.caseId)
+        ? 'Case ID must be the practice work-order number only — one folder-safe name. Do not use patient names, initials, DOB, or chart numbers. Rejected: path separators, .., Windows reserved names, control characters, trailing spaces or periods.'
+        : '';
+      refreshReview();
+    });
+    caseId.addEventListener('blur', () => {
+      intake.caseId = caseId.value.trim();
+      caseId.value = intake.caseId;
+      refreshReview();
+    });
+    visit.addEventListener('change', () => {
+      intake.visit = visit.value;
+      visitErrorEl.textContent = intake.visit && !validVisit(intake.visit)
+        ? 'Visit date must be a real calendar day in YYYY-MM-DD form.'
+        : '';
+      refreshReview();
+    });
+    bucket.addEventListener('change', () => {
+      intake.bucket = bucket.value;
+      refreshReview();
+    });
+    picker.addEventListener('change', () => {
+      if (!enabled) return;
+      addFiles(picker.files);
+      picker.value = '';
+    });
+    drop.addEventListener('dragover', e => {
+      if (enabled) e.preventDefault();
+    });
+    drop.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!enabled) return;
+      if (dropHasDirectory(e)) {
+        setFlash('Drop files, not folders.', 'error');
+        paintFlash();
+        return;
+      }
+      addFiles(e.dataTransfer.files);
+    });
+    if (grant) grant.addEventListener('click', grantAccess);
+    refreshReview();
+  }
+
+  function queueView() {
+    if (!state.root) {
+      app.innerHTML = '<h1>Queue</h1>' +
+        '<p class="lede">Cases from the connected folder appear here. Until a folder is connected, only DEMO Case IDs are shown.</p>' +
+        consumeFlash() + privacyCard() + demoCard() +
+        '<div class="card notice">External folder changes appear after Refresh from disk; this app does not watch continuously.</div>';
+      bindDemo();
+      return;
+    }
+    if (!state.granted) {
+      app.innerHTML = '<h1>Queue</h1>' +
+        consumeFlash() + privacyCard() +
+        '<div class="card error"><p>Permission is not granted. Request access from a button click. The saved folder is not discarded.</p>' +
+        '<div class="row"><button type="button" id="grant">Grant access</button></div></div>' +
+        '<div class="card notice">External folder changes appear after Refresh from disk; this app does not watch continuously.</div>';
+      const grant = document.querySelector('#grant');
+      if (grant) grant.addEventListener('click', grantAccess);
+      return;
+    }
+
+    const scanned = state.scannedAt
+      ? 'Last scanned ' + state.scannedAt.toLocaleTimeString('en-US')
+      : 'Not scanned yet';
+    const cases = state.queue.length
+      ? state.queue.map((c, i) => {
+          const summary = c.visits.map(v =>
+            esc(v.date) + ': ' + BUCKETS.map(b => bucketLabel(b) + ' ' + v.counts[b]).join(' · ')
+          ).join('<br>');
+          return '<div class="card case-row">' +
+            '<strong>' + esc(c.caseId) + '</strong>' +
+            '<span>' + c.visits.length + ' visit(s)</span>' +
+            '<span>' + summary + '</span>' +
+            '<button type="button" class="secondary" data-open="' + i + '">Open case in app</button>' +
+            '</div>';
+        }).join('')
+      : '<div class="card">No files were found in the expected case folders. Refresh after files are added.</div>';
+    const ignored = state.ignored.length
+      ? '<div class="card"><h2>Ignored folders (unexpected name or layout)</h2><ul>' +
+        state.ignored.map(n => '<li>' + esc(n) + '</li>').join('') + '</ul></div>'
+      : '';
+
+    app.innerHTML = '<h1>Queue</h1>' +
+      '<p class="lede">Cases found under the connected folder. Counts come from disk. This is a tool, not a patient chart.</p>' +
+      consumeFlash() + privacyCard() +
+      '<div class="card notice">External folder changes appear after Refresh from disk; this app does not watch continuously.</div>' +
+      '<div class="card row"><span>' + scanned + '</span>' +
+      '<button type="button" id="refresh" class="secondary">Refresh from disk</button></div>' +
+      cases + ignored +
+      '<div id="casePanel"></div>';
+
+    document.querySelector('#refresh').addEventListener('click', async () => {
+      await scan();
+      render();
+    });
+    document.querySelectorAll('[data-open]').forEach(btn => {
+      btn.addEventListener('click', () => openCase(Number(btn.getAttribute('data-open'))));
+    });
+  }
+
+  function openCase(index) {
+    const c = state.queue[index];
+    const panel = document.querySelector('#casePanel');
+    if (!c || !panel) return;
+    panel.innerHTML = '<div class="card"><h2>' + esc(c.caseId) + '</h2>' +
+      c.visits.map(v => {
+        return '<h3>' + esc(v.date) + '</h3>' + BUCKETS.map(b => {
+          const list = v.files[b].map(f => '<li>' + esc(f.name) + ' — ' + prettySize(f.size) + '</li>').join('');
+          return '<p><strong>' + bucketLabel(b) + ' (' + v.counts[b] + ')</strong></p><ul>' + list + '</ul>';
+        }).join('');
+      }).join('') + '</div>';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function render() {
+    const supported = isSupported();
+    lastSupport = supported;
+    let hash = location.hash;
+    if (!ROUTES.includes(hash)) {
+      hash = '#/connect';
+      if (location.hash !== hash) {
+        location.hash = hash;
+        return;
+      }
+    }
+    updateNav(hash);
+    if (!supported) {
+      unsupportedView();
+      return;
+    }
+    if (hash === '#/intake') intakeView();
+    else if (hash === '#/queue') queueView();
+    else connectView();
+  }
+
+  async function init() {
+    intake.visit = localDate();
+    if (!isSupported()) {
+      window.addEventListener('hashchange', render);
+      render();
+      return;
+    }
+    try {
+      state.root = await idbGet();
+      if (state.root) {
+        state.granted = await queryGranted(state.root);
+        if (state.granted) await scan();
+      }
+    } catch (e) {
+      setFlash('Could not read the saved folder connection.', 'error');
+    }
+    window.addEventListener('hashchange', render);
+    window.addEventListener('resize', () => {
+      if (isSupported() !== lastSupport) render();
+    });
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState !== 'visible' || !state.root) return;
+      const ok = await queryGranted(state.root);
+      if (ok === state.granted) return;
+      state.granted = ok;
+      if (ok) await scan();
+      else {
+        state.queue = [];
+        state.ignored = [];
+        state.scannedAt = null;
+      }
+      render();
+    });
+    render();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
