@@ -7,12 +7,13 @@ Pages path: /practice-files/ (same live URL)
 
 Static GitHub Pages UI shell. File System Access API.
 Layout: CaseID/VisitDate/{scans,notes,design,print}.
+Phone JPEG: CaseID/VisitDate/notes/photos/ via local WebRTC + photo-bridge.py.
 Files stay on disk. Nothing is uploaded.
-Only the directory handle is stored in IndexedDB.
+Only the directory handle is stored in IndexedDB. Photo blobs are memory-only.
 
 DEMO Case IDs until a folder is connected.
 Forget folder = browser connection only; files stay.
 
 Not a patient chart. Not HIPAA certified. No PHI in git.
 
-Last ship: grok v1 static shell (replace Codex-era UI).
+Last ship: grok App Loop Edit 1 — phone camera WebRTC JPEG to notes/photos.

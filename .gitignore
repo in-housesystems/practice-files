@@ -16,3 +16,16 @@ fixtures/
 *.csv
 .env
 .env.*
+__pycache__/
+*.py[cod]
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.heic
+*.JPG
+*.JPEG
+*.PNG
+*.WEBP
+*.HEIC
+*.part
