@@ -231,7 +231,6 @@ footer {
   const MAX_FILES = 100;
   const MAX_BYTES = 512 * 1024 * 1024;
   const MIN_DATE = '2000-01-01';
-  const NARROW = '(max-width: 800px)';
   const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
   const UNSAFE_NAME = /[\\/<>:"|?*\x00-\x1f\x7f]/;
   const TRAILING_BAD = /[. ]$/;
@@ -262,7 +261,6 @@ footer {
 
   let fileSeq = 0;
   let reviewGen = 0;
-  let lastSupport = null;
   let demoOpen = null;
 
   function pad(n) { return String(n).padStart(2, '0'); }
@@ -323,8 +321,7 @@ footer {
 
   function isSupported() {
     return typeof window.showDirectoryPicker === 'function' &&
-      window.isSecureContext === true &&
-      !window.matchMedia(NARROW).matches;
+      window.isSecureContext === true;
   }
 
   function canWrite() {
@@ -1170,7 +1167,6 @@ footer {
 
   function render() {
     const supported = isSupported();
-    lastSupport = supported;
     let hash = location.hash;
     if (!ROUTES.includes(hash)) {
       hash = '#/connect';
@@ -1206,9 +1202,6 @@ footer {
       setFlash('Could not read the saved folder connection.', 'error');
     }
     window.addEventListener('hashchange', render);
-    window.addEventListener('resize', () => {
-      if (isSupported() !== lastSupport) render();
-    });
     document.addEventListener('visibilitychange', async () => {
       if (document.visibilityState !== 'visible' || !state.root) return;
       const ok = await queryGranted(state.root);
