@@ -2,6 +2,12 @@
 
 Newest first. This is the human list of what went live. GitHub still has the technical commits.
 
+## Sep 5, 2026 — Queue continue into Intake
+
+- Real Queue case cards now have **Continue in Intake** next to **Open case in app**.
+- Continue fills Case ID, the latest visit date, and the next empty lab stage (scans → design → print, else notes), then opens Intake so the next-stage files can be dropped without retyping.
+- Open case in app is still the on-page file list. DEMO cards are unchanged.
+
 ## Sep 4, 2026 — Architecture pass (no change)
 
 - Looked at the live app and this repo. No structure change was needed.

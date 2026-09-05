@@ -375,6 +375,14 @@ video#live {
     return BUCKETS.indexOf(s) !== -1;
   }
 
+  function nextLabBucket(visit) {
+    const counts = (visit && visit.counts) || {};
+    if (!counts.scans) return 'scans';
+    if (!counts.design) return 'design';
+    if (!counts.print) return 'print';
+    return 'notes';
+  }
+
   function destReady() {
     return validCaseId(intake.caseId) && validVisit(intake.visit) && validBucket(intake.bucket);
   }
@@ -1406,7 +1414,10 @@ video#live {
             '<strong>' + esc(c.caseId) + '</strong>' +
             '<span>' + c.visits.length + ' visit(s)</span>' +
             '<span>' + summary + '</span>' +
+            '<span class="row">' +
             '<button type="button" class="secondary" data-open="' + i + '">Open case in app</button>' +
+            '<button type="button" data-continue="' + i + '">Continue in Intake</button>' +
+            '</span>' +
             '</div>';
         }).join('')
       : '<div class="card">No files were found in the expected case folders. Refresh after files are added.</div>';
@@ -1431,6 +1442,23 @@ video#live {
     document.querySelectorAll('[data-open]').forEach(btn => {
       btn.addEventListener('click', () => openCase(Number(btn.getAttribute('data-open'))));
     });
+    document.querySelectorAll('[data-continue]').forEach(btn => {
+      btn.addEventListener('click', () => continueInIntake(Number(btn.getAttribute('data-continue'))));
+    });
+  }
+
+  function continueInIntake(index) {
+    const c = state.queue[index];
+    if (!c) return;
+    const latest = c.visits[0];
+    intake.caseId = c.caseId;
+    if (latest) {
+      intake.visit = latest.date;
+      intake.bucket = nextLabBucket(latest);
+    } else {
+      intake.bucket = 'scans';
+    }
+    location.hash = '#/intake';
   }
 
   function openCase(index) {

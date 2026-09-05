@@ -16,4 +16,4 @@ Forget folder = browser connection only; files stay.
 
 Not a patient chart. Not HIPAA certified. No PHI in git.
 
-Last ship: grok App Loop Edit 1 — phone camera WebRTC JPEG to notes/photos.
+Last ship: Queue Continue in Intake — next empty lab stage (scans → design → print, else notes).
