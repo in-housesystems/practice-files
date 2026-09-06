@@ -148,6 +148,8 @@ button, .button {
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 :focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
 nav a:focus-visible { outline-color: var(--mint); }
+.skip-link { position: fixed; left: 12px; top: 8px; z-index: 50; transform: translateY(-150%); }
+.skip-link:focus { transform: translateY(0); }
 .row { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
 .file-row, .case-row {
   display: grid;
@@ -224,7 +226,8 @@ video#live {
 </style>
 </head>
 <body>
-<nav>
+<a class="button skip-link" href="#app">Skip to main content</a>
+<nav aria-label="Primary navigation">
   <div class="nav-in">
     <div class="brand"><span class="mark">IHS</span><span class="brand-name">Practice Files</span></div>
     <a href="#/connect">Connect</a>

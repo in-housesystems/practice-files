@@ -2,6 +2,13 @@
 
 Newest first. This is the human list of what went live. GitHub still has the technical commits.
 
+## Sep 5, 2026 — Faster keyboard navigation
+
+- Added a keyboard-visible skip link to jump directly past the sticky navigation.
+- Labeled the primary navigation for screen readers.
+- Folder handling, photo transfer, storage boundaries, and the live URL did not change.
+- Local scratch output under `__grok/` is now ignored.
+
 ## Sep 5, 2026 — Queue continue into Intake
 
 - Real Queue case cards now have **Continue in Intake** next to **Open case in app**.
